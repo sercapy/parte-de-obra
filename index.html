@@ -212,6 +212,31 @@
   .addphoto svg{ width:20px; height:20px; }
   .addphoto input{ position:absolute; inset:0; opacity:0; }
 
+  /* Bitácora chat */
+  .chatfeed{ display:flex; flex-direction:column; gap:9px; max-height:420px; overflow-y:auto; margin-bottom:10px; padding-right:2px; }
+  .chatempty{ font-size:12.5px; color:var(--ink-faint); text-align:center; padding:16px 6px; }
+  .chatmsg{ align-self:flex-start; max-width:86%; background:var(--surface-2); border-radius:13px 13px 13px 3px; padding:8px 11px; }
+  .chatmsg.mine{ align-self:flex-end; background:var(--accent-soft); border-radius:13px 13px 3px 13px; }
+  .chatmsg .cm-head{ display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:2px; }
+  .chatmsg .cm-autor{ font-size:11.5px; font-weight:700; color:var(--accent-2); }
+  .chatmsg .cm-hora{ font-size:10px; color:var(--ink-faint); white-space:nowrap; }
+  .chatmsg .cm-texto{ font-size:13.5px; color:var(--ink); white-space:pre-wrap; word-break:break-word; }
+  .chatmsg .cm-foto{ display:block; max-width:100%; border-radius:9px; margin-top:6px; }
+  .chatmsg .cm-del{ display:flex; align-items:center; gap:4px; margin-top:5px; font-size:11px; font-weight:600; color:var(--bad); background:none; border:none; padding:0; }
+  .chatmsg .cm-del svg{ width:12px; height:12px; }
+  .chatmsg .cm-del.confirm{ text-decoration:underline; }
+  .chat-preview{ display:flex; align-items:center; gap:8px; margin-bottom:8px; background:var(--surface-2); border-radius:10px; padding:6px 8px; }
+  .chat-preview img{ width:42px; height:42px; object-fit:cover; border-radius:7px; flex-shrink:0; }
+  .chat-preview button{ display:flex; align-items:center; gap:4px; font-size:12px; font-weight:600; color:var(--bad); background:none; border:none; }
+  .chat-preview button svg{ width:13px; height:13px; }
+  .chatcompose{ display:flex; align-items:flex-end; gap:7px; }
+  .chatcompose textarea{ flex:1; resize:none; min-height:38px; max-height:96px; border:1px solid var(--line); border-radius:11px; padding:9px 11px; font-size:13.5px; font-family:inherit; background:var(--surface); color:var(--ink); }
+  .cc-btn{ width:38px; height:38px; border-radius:10px; border:none; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .cc-btn svg{ width:18px; height:18px; }
+  .cc-attach{ color:var(--ink-dim); background:var(--surface-2); position:relative; overflow:hidden; cursor:pointer; }
+  .cc-attach input{ position:absolute; inset:0; opacity:0; }
+  .cc-send{ background:var(--accent); color:var(--accent-ink); cursor:pointer; }
+
   /* Buttons */
   .btn{ display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:11px 16px; border-radius:11px; border:none; font-weight:600; font-size:14px; cursor:pointer; }
   .btn svg{ width:15px; height:15px; }
@@ -270,7 +295,6 @@
     width:100%; padding:10px 11px; border:1px solid var(--line); border-radius:10px; font-size:14.5px; background:var(--surface); color:var(--ink); font-family:inherit;
   }
   .form-row .hint{ font-size:11.5px; color:var(--ink-faint); margin-top:4px; }
-  .bitacora-meta{ font-size:11.5px; color:var(--ink-faint); margin-top:8px; }
   .checklist{ display:flex; flex-wrap:wrap; gap:7px; }
   .checkchip{ display:flex; align-items:center; gap:6px; padding:8px 12px; border-radius:99px; border:1px solid var(--line); background:var(--surface); font-size:13px; font-weight:600; }
   .checkchip input{ width:15px; height:15px; }
@@ -738,7 +762,9 @@ var state = {
   savingCount: 0,
   offlineMode: false,
   subsTab: {},
-  bitacoraFotosDraft: null
+  bitacoraMensajes: [],
+  bitacoraChatFoto: null,
+  bitacoraChatDraftTexto: ''
 };
 var perContratistaDebounce = {};
 
@@ -1004,7 +1030,9 @@ function setObra(id){
   state.pendingConteos = {};
   state.asistenciaDoc = null;
   state.bitacoraDoc = null;
-  state.bitacoraFotosDraft = null;
+  state.bitacoraMensajes = [];
+  state.bitacoraChatFoto = null;
+  state.bitacoraChatDraftTexto = '';
   state.historial = [];
   state.historialBitacora = [];
   state.compras = [];
@@ -1052,7 +1080,13 @@ function resubscribeForTab(){
     });
     state.subsTab.bita = Store.subscribeDoc('bitacora', docIdFor(obraId, state.currentDate), function(doc){
       state.bitacoraDoc = doc;
-      state.bitacoraFotosDraft = null;
+      preserveFocus(document.getElementById('tab-hoy'), renderTabHoy);
+    });
+    state.subsTab.bitaMsgs = Store.subscribeCollection('bitacoraMensajes', {
+      where: [['obraId','==',obraId], ['fecha','==',state.currentDate]],
+      orderBy: ['creadoEn','asc']
+    }, function(rows){
+      state.bitacoraMensajes = rows;
       preserveFocus(document.getElementById('tab-hoy'), renderTabHoy);
     });
   } else if (state.currentTab === 'historial'){
@@ -1132,6 +1166,7 @@ function renderCurrentTab(){
 var ICO = {
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
   camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8a2 2 0 0 1 2-2h1.5l1-1.5h7l1 1.5H18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8Z"/><circle cx="12" cy="13" r="3.4"/></svg>',
+  send: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/></svg>',
   close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
   chevL: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>',
   chevR: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>',
@@ -1180,6 +1215,8 @@ function totalHoy(){
   return lista.reduce(function(sum, c){ return sum + conteoValorPara(c.id); }, 0);
 }
 
+var bitacoraMsgPendingDelete = null;
+
 function renderTabHoy(){
   var root = document.getElementById('tab-hoy');
   if (!state.currentObraId){
@@ -1189,11 +1226,10 @@ function renderTabHoy(){
   }
   var lista = contratistasDeObra(state.currentObraId);
   var esHoy = state.currentDate === todayISO();
-  var fotos = (state.bitacoraFotosDraft !== null) ? state.bitacoraFotosDraft : ((state.bitacoraDoc && state.bitacoraDoc.fotos) || []);
-  var nota = (state.bitacoraDoc && state.bitacoraDoc.nota) || '';
   var trabajado = (state.bitacoraDoc && typeof state.bitacoraDoc.trabajado === 'boolean') ? state.bitacoraDoc.trabajado : true;
   var motivo = (state.bitacoraDoc && state.bitacoraDoc.motivoNoTrabajo) || '';
   var clima = (state.bitacoraDoc && state.bitacoraDoc.climaEstado) || '';
+  var miNombre = (state.sesionActual && (state.sesionActual.nombre || state.sesionActual.usuario)) || '';
 
   var html = '';
   html += '<div class="daynav">';
@@ -1250,26 +1286,29 @@ function renderTabHoy(){
   html += '</div></div>';
 
   html += '<div class="divider-row" style="margin-bottom:6px;"><div class="brow-label" style="margin-bottom:0;">Libro de obra · Observaciones</div><button class="btn btn-outline btn-sm" id="btnLibroObraPdf">' + ICO.doc + ' Generar PDF</button></div>';
-  html += '<textarea id="bitacoraNota" placeholder="Avance de obra, incidentes, otras notas...">' + escapeHtml(nota) + '</textarea>';
-  html += '<div class="photogrid" id="photogrid">';
-  fotos.forEach(function(src, idx){
-    html += '<div class="photothumb"><img src="' + src + '"><button class="rm" data-idx="' + idx + '">' + ICO.close + '</button></div>';
-  });
-  if (fotos.length < 3){
-    html += '<label class="addphoto">' + ICO.camera + '<input type="file" accept="image/*" id="bitacoraFotoInput"></label>';
+  html += '<div class="chatfeed" id="chatfeed">';
+  if (!state.bitacoraMensajes.length){
+    html += '<div class="chatempty">Todavía no hay mensajes ' + (esHoy ? 'hoy' : 'ese día') + '. Escribí el primero.</div>';
+  } else {
+    state.bitacoraMensajes.forEach(function(m){
+      var esMio = !!miNombre && m.autor === miNombre;
+      html += '<div class="chatmsg' + (esMio ? ' mine' : '') + '">';
+      html += '<div class="cm-head"><span class="cm-autor">' + escapeHtml(m.autor || 'Usuario') + '</span><span class="cm-hora">' + (m.creadoEn ? fmtFechaHora(m.creadoEn) : '') + '</span></div>';
+      if (m.texto) html += '<div class="cm-texto">' + escapeHtml(m.texto) + '</div>';
+      if (m.foto) html += '<img class="cm-foto" src="' + m.foto + '">';
+      if (esMio) html += '<button class="cm-del" data-id="' + m.id + '">' + ICO.trash + ' Eliminar</button>';
+      html += '</div>';
+    });
   }
   html += '</div>';
-  if (state.bitacoraDoc && state.bitacoraDoc.actualizadoPor){
-    var mismoAutor = state.bitacoraDoc.creadoPor === state.bitacoraDoc.actualizadoPor;
-    html += '<div class="bitacora-meta">';
-    if (state.bitacoraDoc.creadoPor){
-      html += 'Cargado por ' + escapeHtml(state.bitacoraDoc.creadoPor) + (state.bitacoraDoc.creadoEn ? ' · ' + fmtFechaHora(state.bitacoraDoc.creadoEn) : '');
-    }
-    if (!mismoAutor || !state.bitacoraDoc.creadoPor){
-      html += (state.bitacoraDoc.creadoPor ? '<br>' : '') + 'Última edición: ' + escapeHtml(state.bitacoraDoc.actualizadoPor) + (state.bitacoraDoc.actualizadoEn ? ' · ' + fmtFechaHora(state.bitacoraDoc.actualizadoEn) : '');
-    }
-    html += '</div>';
+  if (state.bitacoraChatFoto){
+    html += '<div class="chat-preview"><img src="' + state.bitacoraChatFoto + '"><button id="chatPreviewQuitar" type="button">' + ICO.close + ' Quitar foto</button></div>';
   }
+  html += '<div class="chatcompose">';
+  html += '<label class="cc-btn cc-attach">' + ICO.camera + '<input type="file" accept="image/*" id="chatFotoInput"></label>';
+  html += '<textarea id="chatTexto" placeholder="Escribí una novedad..." rows="1">' + escapeHtml(state.bitacoraChatDraftTexto || '') + '</textarea>';
+  html += '<button class="cc-btn cc-send" id="chatEnviar" type="button">' + ICO.send + '</button>';
+  html += '</div>';
   html += '</div>';
 
   root.innerHTML = html;
@@ -1304,9 +1343,6 @@ function renderTabHoy(){
     });
   }
 
-  var notaEl = document.getElementById('bitacoraNota');
-  notaEl.addEventListener('input', debounce(function(){ guardarBitacora({ nota: notaEl.value }); }, 700));
-
   document.getElementById('btnLibroObraPdf').onclick = exportLibroObraPdf;
 
   var segTrabajo = document.getElementById('segTrabajo');
@@ -1335,27 +1371,44 @@ function renderTabHoy(){
     guardarBitacora({ climaEstado: clima === val ? '' : val });
   });
 
-  var fotoInput = document.getElementById('bitacoraFotoInput');
-  if (fotoInput){
-    fotoInput.addEventListener('change', function(e){
+  var chatTexto = document.getElementById('chatTexto');
+  if (chatTexto) chatTexto.addEventListener('input', function(e){ state.bitacoraChatDraftTexto = e.target.value; });
+
+  var chatFotoInput = document.getElementById('chatFotoInput');
+  if (chatFotoInput){
+    chatFotoInput.addEventListener('change', function(e){
       var file = e.target.files && e.target.files[0];
       if (!file) return;
       compressImage(file).then(function(dataUrl){
-        var actuales = (state.bitacoraFotosDraft !== null) ? state.bitacoraFotosDraft : ((state.bitacoraDoc && state.bitacoraDoc.fotos) || []);
-        var nuevas = actuales.concat([dataUrl]);
-        state.bitacoraFotosDraft = nuevas;
-        guardarBitacora({ fotos: nuevas });
+        state.bitacoraChatFoto = dataUrl;
+        preserveFocus(document.getElementById('tab-hoy'), renderTabHoy);
       }).catch(function(err){ console.error(err); toast('No se pudo procesar la foto', 'bad'); });
     });
   }
-  document.getElementById('photogrid').addEventListener('click', function(e){
-    var rm = e.target.closest('.rm');
-    if (!rm) return;
-    var idx = parseInt(rm.dataset.idx, 10);
-    var actuales = (state.bitacoraFotosDraft !== null) ? state.bitacoraFotosDraft : ((state.bitacoraDoc && state.bitacoraDoc.fotos) || []);
-    var nuevas = actuales.slice(0, idx).concat(actuales.slice(idx+1));
-    state.bitacoraFotosDraft = nuevas;
-    guardarBitacora({ fotos: nuevas });
+
+  var chatPreviewQuitar = document.getElementById('chatPreviewQuitar');
+  if (chatPreviewQuitar) chatPreviewQuitar.onclick = function(){
+    state.bitacoraChatFoto = null;
+    preserveFocus(document.getElementById('tab-hoy'), renderTabHoy);
+  };
+
+  var chatEnviarBtn = document.getElementById('chatEnviar');
+  if (chatEnviarBtn) chatEnviarBtn.onclick = enviarMensajeBitacora;
+
+  var chatfeed = document.getElementById('chatfeed');
+  if (chatfeed) chatfeed.addEventListener('click', function(e){
+    var btn = e.target.closest('.cm-del');
+    if (!btn) return;
+    var id = btn.dataset.id;
+    if (bitacoraMsgPendingDelete === id){
+      bitacoraMsgPendingDelete = null;
+      Store.deleteDoc('bitacoraMensajes', id).catch(function(err){ console.error(err); toast('No se pudo eliminar', 'bad'); });
+    } else {
+      bitacoraMsgPendingDelete = id;
+      btn.classList.add('confirm');
+      toast('Tocá de nuevo para eliminar');
+      setTimeout(function(){ if (bitacoraMsgPendingDelete === id){ bitacoraMsgPendingDelete = null; btn.classList.remove('confirm'); } }, 3000);
+    }
   });
 }
 
@@ -1364,7 +1417,9 @@ function changeDay(iso){
   state.pendingConteos = {};
   state.asistenciaDoc = null;
   state.bitacoraDoc = null;
-  state.bitacoraFotosDraft = null;
+  state.bitacoraMensajes = [];
+  state.bitacoraChatFoto = null;
+  state.bitacoraChatDraftTexto = '';
   resubscribeForTab();
   renderTabHoy();
 }
@@ -1411,21 +1466,38 @@ async function guardarBitacora(partial){
     trabajado: (state.bitacoraDoc && typeof state.bitacoraDoc.trabajado === 'boolean') ? state.bitacoraDoc.trabajado : true,
     motivoNoTrabajo: (state.bitacoraDoc && state.bitacoraDoc.motivoNoTrabajo) || '',
     climaEstado: (state.bitacoraDoc && state.bitacoraDoc.climaEstado) || '',
-    nota: (state.bitacoraDoc && state.bitacoraDoc.nota) || '',
-    fotos: (state.bitacoraDoc && state.bitacoraDoc.fotos) || [],
     creadoPor: (state.bitacoraDoc && state.bitacoraDoc.creadoPor) || usuarioActual,
     creadoEn: (state.bitacoraDoc && state.bitacoraDoc.creadoEn) || nowISO()
   };
   var data = Object.assign(base, partial, { actualizadoEn: nowISO(), actualizadoPor: usuarioActual });
-  if (JSON.stringify(data).length > 240000){
-    toast('Las fotos pesan demasiado juntas. Sacá una y probá de nuevo.', 'bad');
-    if (partial.fotos){ state.bitacoraFotosDraft = base.fotos; renderTabHoy(); }
-    return;
-  }
   beginSave();
   try{
     await Store.setDoc('bitacora', docIdFor(state.currentObraId, state.currentDate), data);
   }catch(e){ console.error(e); toast('No se pudo guardar la bitácora', 'bad'); }
+  endSave();
+}
+
+async function enviarMensajeBitacora(){
+  if (!state.currentObraId) return;
+  var texto = (state.bitacoraChatDraftTexto || '').trim();
+  var foto = state.bitacoraChatFoto;
+  if (!texto && !foto){ toast('Escribí algo o agregá una foto', 'bad'); return; }
+  var autor = (state.sesionActual && (state.sesionActual.nombre || state.sesionActual.usuario)) || 'Usuario';
+  var data = {
+    obraId: state.currentObraId,
+    fecha: state.currentDate,
+    autor: autor,
+    texto: texto,
+    foto: foto || null,
+    creadoEn: nowISO()
+  };
+  state.bitacoraChatDraftTexto = '';
+  state.bitacoraChatFoto = null;
+  renderTabHoy();
+  beginSave();
+  try{
+    await Store.addDoc('bitacoraMensajes', data);
+  }catch(e){ console.error(e); toast('No se pudo enviar el mensaje', 'bad'); }
   endSave();
 }
 
@@ -1597,19 +1669,35 @@ async function exportLibroObraPdf(){
   try{
     var asis = await Store.getCollection('asistencias', { where: [['obraId','==',state.currentObraId]] });
     var bita = await Store.getCollection('bitacora', { where: [['obraId','==',state.currentObraId]] });
+    var mensajes = await Store.getCollection('bitacoraMensajes', { where: [['obraId','==',state.currentObraId]], orderBy: ['creadoEn','asc'] });
+    var mensajesPorFecha = {};
+    mensajes.forEach(function(m){
+      if (!mensajesPorFecha[m.fecha]) mensajesPorFecha[m.fecha] = [];
+      mensajesPorFecha[m.fecha].push(m);
+    });
     var dias = mergedDias(asis, bita, null);
-    if (!dias.length){ toast('Todavía no hay registros de bitácora para esta obra', 'bad'); return; }
+    if (!dias.length && !mensajes.length){ toast('Todavía no hay registros de bitácora para esta obra', 'bad'); return; }
+    Object.keys(mensajesPorFecha).forEach(function(fecha){
+      if (!dias.find(function(d){ return d.fecha === fecha; })) dias.push({ fecha: fecha, asis: null, bita: null });
+    });
+    dias.sort(function(a,b){ return a.fecha < b.fecha ? -1 : (a.fecha > b.fecha ? 1 : 0); });
 
     var rows = dias.map(function(d){
       var b = d.bita || {};
       var trabajo = (typeof b.trabajado === 'boolean') ? (b.trabajado ? 'Sí' : 'No') : 'Sí';
       if (trabajo === 'No' && b.motivoNoTrabajo) trabajo += ' (' + b.motivoNoTrabajo + ')';
+      var msgsDia = mensajesPorFecha[d.fecha] || [];
+      var obs = msgsDia.map(function(m){
+        var hora = m.creadoEn ? fmtFechaHora(m.creadoEn).split(', ')[1] : '';
+        var linea = (m.autor || 'Usuario') + (hora ? ' (' + hora + ')' : '') + ': ' + (m.texto || '') + (m.foto ? ' [foto]' : '');
+        return linea;
+      }).join('\n');
       return [
         fmtDateShort(d.fecha),
         diaTotalObreros(d) || '',
         trabajo,
         b.climaEstado || '',
-        b.nota || ''
+        obs
       ];
     });
 
