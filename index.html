@@ -643,13 +643,15 @@ var Store = {
   subscribeCollection: function(path, opts, cb){
     opts = opts || {};
     if (this.backend === 'db'){
+      // Only equality/where filters go to Firestore server-side (need no composite
+      // index). orderBy + limit are applied client-side so this never requires
+      // creating a composite index in the Firebase console.
       var q = this.dbRef.collection(path);
       (opts.where || []).forEach(function(w){ q = q.where(w[0], w[1], w[2]); });
-      if (opts.orderBy) q = q.orderBy(opts.orderBy[0], opts.orderBy[1] || 'asc');
-      if (opts.limit) q = q.limit(opts.limit);
       var self = this;
       return q.onSnapshot(function(snap){
-        cb(snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); }));
+        var rows = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+        cb(self._applyFilters(rows, { orderBy: opts.orderBy, limit: opts.limit }));
       }, function(err){ console.error('db error', path, err); toast('Problema de sincronización', 'bad'); });
     } else {
       var self2 = this;
@@ -666,9 +668,10 @@ var Store = {
     if (this.backend === 'db'){
       var q = this.dbRef.collection(path);
       (opts.where || []).forEach(function(w){ q = q.where(w[0], w[1], w[2]); });
-      if (opts.orderBy) q = q.orderBy(opts.orderBy[0], opts.orderBy[1] || 'asc');
-      if (opts.limit) q = q.limit(opts.limit);
-      return q.get().then(function(snap){ return snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); }); });
+      return q.get().then(function(snap){
+        var rows = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+        return self._applyFilters(rows, { orderBy: opts.orderBy, limit: opts.limit });
+      });
     } else {
       return this.local.collection(path).get().then(function(snap){
         var rows = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
