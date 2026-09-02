@@ -419,6 +419,7 @@
 
   <main>
     <section class="tabpanel active" id="tab-hoy"></section>
+    <section class="tabpanel" id="tab-libro"></section>
     <section class="tabpanel" id="tab-historial"></section>
     <section class="tabpanel" id="tab-compras"></section>
     <section class="tabpanel" id="tab-pedidos"></section>
@@ -430,6 +431,10 @@
     <button class="navbtn active" data-tab="hoy">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M3 10h18"/><path d="M8 2v4M16 2v4"/><path d="M8.5 15l2 2 4-4"/></svg>
       <span>Hoy</span>
+    </button>
+    <button class="navbtn" data-tab="libro">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6"/></svg>
+      <span>Libro</span>
     </button>
     <button class="navbtn" data-tab="historial">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
@@ -1082,12 +1087,17 @@ function resubscribeForTab(){
       state.bitacoraDoc = doc;
       preserveFocus(document.getElementById('tab-hoy'), renderTabHoy);
     });
+  } else if (state.currentTab === 'libro'){
+    state.subsTab.bita = Store.subscribeDoc('bitacora', docIdFor(obraId, state.currentDate), function(doc){
+      state.bitacoraDoc = doc;
+      preserveFocus(document.getElementById('tab-libro'), renderTabLibro);
+    });
     state.subsTab.bitaMsgs = Store.subscribeCollection('bitacoraMensajes', {
       where: [['obraId','==',obraId], ['fecha','==',state.currentDate]],
       orderBy: ['creadoEn','asc']
     }, function(rows){
       state.bitacoraMensajes = rows;
-      preserveFocus(document.getElementById('tab-hoy'), renderTabHoy);
+      preserveFocus(document.getElementById('tab-libro'), renderTabLibro);
     });
   } else if (state.currentTab === 'historial'){
     state.subsTab.hist = Store.subscribeCollection('asistencias', {
@@ -1153,6 +1163,7 @@ function switchTab(tab){
 function renderCurrentTab(){
   renderObraSelect();
   if (state.currentTab === 'hoy') renderTabHoy();
+  else if (state.currentTab === 'libro') renderTabLibro();
   else if (state.currentTab === 'historial') renderTabHistorial();
   else if (state.currentTab === 'compras') renderTabCompras();
   else if (state.currentTab === 'pedidos') renderTabPedidos();
@@ -1228,8 +1239,6 @@ function renderTabHoy(){
   var esHoy = state.currentDate === todayISO();
   var trabajado = (state.bitacoraDoc && typeof state.bitacoraDoc.trabajado === 'boolean') ? state.bitacoraDoc.trabajado : true;
   var motivo = (state.bitacoraDoc && state.bitacoraDoc.motivoNoTrabajo) || '';
-  var clima = (state.bitacoraDoc && state.bitacoraDoc.climaEstado) || '';
-  var miNombre = (state.sesionActual && (state.sesionActual.nombre || state.sesionActual.usuario)) || '';
 
   var html = '';
   html += '<div class="daynav">';
@@ -1259,57 +1268,9 @@ function renderTabHoy(){
     html += '</div>';
   }
 
-  html += '<div class="section-title">Bitácora del día</div>';
   if (!trabajado){
-    html += '<div class="banner bad">' + ICO.warn + '<div>No se trabajó ' + (esHoy ? 'hoy' : 'ese día') + (motivo ? ' — ' + escapeHtml(motivo) : '') + '.</div></div>';
+    html += '<div class="banner bad">' + ICO.warn + '<div>No se trabajó ' + (esHoy ? 'hoy' : 'ese día') + (motivo ? ' — ' + escapeHtml(motivo) : '') + '. Mirá el Libro de obra para más detalle.</div></div>';
   }
-  html += '<div class="card bitacora" style="padding:14px;">';
-
-  html += '<div class="bfield"><div class="brow-label">¿Se trabajó ' + (esHoy ? 'hoy' : 'ese día') + '?</div>';
-  html += '<div class="segtoggle" id="segTrabajo">';
-  html += '<button data-val="si" class="' + (trabajado ? 'active' : '') + '">Sí, se trabajó</button>';
-  html += '<button data-val="no" class="' + (!trabajado ? 'active bad' : '') + '">No se trabajó</button>';
-  html += '</div></div>';
-
-  if (!trabajado){
-    html += '<div class="bfield"><div class="brow-label">Motivo</div><div class="chiprow" id="chipsMotivo">';
-    MOTIVO_OPCIONES.forEach(function(m){
-      html += '<button class="chip' + (motivo === m ? ' active' : '') + '" data-val="' + escapeHtml(m) + '">' + escapeHtml(m) + '</button>';
-    });
-    html += '</div></div>';
-  }
-
-  html += '<div class="bfield"><div class="brow-label">Estado del clima</div><div class="chiprow" id="chipsClima">';
-  CLIMA_OPCIONES.forEach(function(c){
-    html += '<button class="chip' + (clima === c ? ' active' : '') + '" data-val="' + escapeHtml(c) + '">' + escapeHtml(c) + '</button>';
-  });
-  html += '</div></div>';
-
-  html += '<div class="divider-row" style="margin-bottom:6px;"><div class="brow-label" style="margin-bottom:0;">Libro de obra · Observaciones</div><button class="btn btn-outline btn-sm" id="btnLibroObraPdf">' + ICO.doc + ' Generar PDF</button></div>';
-  html += '<div class="chatfeed" id="chatfeed">';
-  if (!state.bitacoraMensajes.length){
-    html += '<div class="chatempty">Todavía no hay mensajes ' + (esHoy ? 'hoy' : 'ese día') + '. Escribí el primero.</div>';
-  } else {
-    state.bitacoraMensajes.forEach(function(m){
-      var esMio = !!miNombre && m.autor === miNombre;
-      html += '<div class="chatmsg' + (esMio ? ' mine' : '') + '">';
-      html += '<div class="cm-head"><span class="cm-autor">' + escapeHtml(m.autor || 'Usuario') + '</span><span class="cm-hora">' + (m.creadoEn ? fmtFechaHora(m.creadoEn) : '') + '</span></div>';
-      if (m.texto) html += '<div class="cm-texto">' + escapeHtml(m.texto) + '</div>';
-      if (m.foto) html += '<img class="cm-foto" src="' + m.foto + '">';
-      if (esMio) html += '<button class="cm-del" data-id="' + m.id + '">' + ICO.trash + ' Eliminar</button>';
-      html += '</div>';
-    });
-  }
-  html += '</div>';
-  if (state.bitacoraChatFoto){
-    html += '<div class="chat-preview"><img src="' + state.bitacoraChatFoto + '"><button id="chatPreviewQuitar" type="button">' + ICO.close + ' Quitar foto</button></div>';
-  }
-  html += '<div class="chatcompose">';
-  html += '<label class="cc-btn cc-attach">' + ICO.camera + '<input type="file" accept="image/*" id="chatFotoInput"></label>';
-  html += '<textarea id="chatTexto" placeholder="Escribí una novedad..." rows="1">' + escapeHtml(state.bitacoraChatDraftTexto || '') + '</textarea>';
-  html += '<button class="cc-btn cc-send" id="chatEnviar" type="button">' + ICO.send + '</button>';
-  html += '</div>';
-  html += '</div>';
 
   root.innerHTML = html;
 
@@ -1342,6 +1303,82 @@ function renderTabHoy(){
       }
     });
   }
+}
+
+function renderTabLibro(){
+  var root = document.getElementById('tab-libro');
+  if (!state.currentObraId){
+    root.innerHTML = obrasVacioHTML();
+    bindObrasVacio(root);
+    return;
+  }
+  var esHoy = state.currentDate === todayISO();
+  var trabajado = (state.bitacoraDoc && typeof state.bitacoraDoc.trabajado === 'boolean') ? state.bitacoraDoc.trabajado : true;
+  var motivo = (state.bitacoraDoc && state.bitacoraDoc.motivoNoTrabajo) || '';
+  var clima = (state.bitacoraDoc && state.bitacoraDoc.climaEstado) || '';
+  var miNombre = (state.sesionActual && (state.sesionActual.nombre || state.sesionActual.usuario)) || '';
+
+  var html = '';
+  html += '<div class="daynav">';
+  html += '<button class="arrow" id="libroDayPrev">' + ICO.chevL + '</button>';
+  html += '<div class="datebox"><span>' + escapeHtml(fmtDateMed(state.currentDate)) + '</span>' + (esHoy ? '<span class="today-badge">Hoy</span>' : '') + '<input type="date" id="libroDayPicker" value="' + state.currentDate + '"></div>';
+  html += '<button class="arrow" id="libroDayNext"' + (esHoy ? ' disabled style="opacity:.35"' : '') + '>' + ICO.chevR + '</button>';
+  html += '</div>';
+
+  html += '<div class="section-title">Libro de obra · ' + escapeHtml(obraNombre(state.currentObraId)) + '</div>';
+  html += '<div class="card bitacora" style="padding:14px;">';
+
+  html += '<div class="bfield"><div class="brow-label">¿Se trabajó ' + (esHoy ? 'hoy' : 'ese día') + '?</div>';
+  html += '<div class="segtoggle" id="segTrabajo">';
+  html += '<button data-val="si" class="' + (trabajado ? 'active' : '') + '">Sí, se trabajó</button>';
+  html += '<button data-val="no" class="' + (!trabajado ? 'active bad' : '') + '">No se trabajó</button>';
+  html += '</div></div>';
+
+  if (!trabajado){
+    html += '<div class="bfield"><div class="brow-label">Motivo</div><div class="chiprow" id="chipsMotivo">';
+    MOTIVO_OPCIONES.forEach(function(m){
+      html += '<button class="chip' + (motivo === m ? ' active' : '') + '" data-val="' + escapeHtml(m) + '">' + escapeHtml(m) + '</button>';
+    });
+    html += '</div></div>';
+  }
+
+  html += '<div class="bfield"><div class="brow-label">Estado del clima</div><div class="chiprow" id="chipsClima">';
+  CLIMA_OPCIONES.forEach(function(c){
+    html += '<button class="chip' + (clima === c ? ' active' : '') + '" data-val="' + escapeHtml(c) + '">' + escapeHtml(c) + '</button>';
+  });
+  html += '</div></div>';
+
+  html += '<div class="divider-row" style="margin-bottom:6px;"><div class="brow-label" style="margin-bottom:0;">Observaciones</div><button class="btn btn-outline btn-sm" id="btnLibroObraPdf">' + ICO.doc + ' Generar PDF</button></div>';
+  html += '<div class="chatfeed" id="chatfeed">';
+  if (!state.bitacoraMensajes.length){
+    html += '<div class="chatempty">Todavía no hay mensajes ' + (esHoy ? 'hoy' : 'ese día') + '. Escribí el primero.</div>';
+  } else {
+    state.bitacoraMensajes.forEach(function(m){
+      var esMio = !!miNombre && m.autor === miNombre;
+      html += '<div class="chatmsg' + (esMio ? ' mine' : '') + '">';
+      html += '<div class="cm-head"><span class="cm-autor">' + escapeHtml(m.autor || 'Usuario') + '</span><span class="cm-hora">' + (m.creadoEn ? fmtFechaHora(m.creadoEn) : '') + '</span></div>';
+      if (m.texto) html += '<div class="cm-texto">' + escapeHtml(m.texto) + '</div>';
+      if (m.foto) html += '<img class="cm-foto" src="' + m.foto + '">';
+      if (esMio) html += '<button class="cm-del" data-id="' + m.id + '">' + ICO.trash + ' Eliminar</button>';
+      html += '</div>';
+    });
+  }
+  html += '</div>';
+  if (state.bitacoraChatFoto){
+    html += '<div class="chat-preview"><img src="' + state.bitacoraChatFoto + '"><button id="chatPreviewQuitar" type="button">' + ICO.close + ' Quitar foto</button></div>';
+  }
+  html += '<div class="chatcompose">';
+  html += '<label class="cc-btn cc-attach">' + ICO.camera + '<input type="file" accept="image/*" id="chatFotoInput"></label>';
+  html += '<textarea id="chatTexto" placeholder="Escribí una novedad..." rows="1">' + escapeHtml(state.bitacoraChatDraftTexto || '') + '</textarea>';
+  html += '<button class="cc-btn cc-send" id="chatEnviar" type="button">' + ICO.send + '</button>';
+  html += '</div>';
+  html += '</div>';
+
+  root.innerHTML = html;
+
+  document.getElementById('libroDayPrev').onclick = function(){ changeDay(addDaysISO(state.currentDate, -1)); };
+  document.getElementById('libroDayNext').onclick = function(){ if (state.currentDate === todayISO()) return; changeDay(addDaysISO(state.currentDate, 1)); };
+  document.getElementById('libroDayPicker').onchange = function(e){ if (!e.target.value) return; changeDay(e.target.value); };
 
   document.getElementById('btnLibroObraPdf').onclick = exportLibroObraPdf;
 
@@ -1381,7 +1418,7 @@ function renderTabHoy(){
       if (!file) return;
       compressImage(file).then(function(dataUrl){
         state.bitacoraChatFoto = dataUrl;
-        preserveFocus(document.getElementById('tab-hoy'), renderTabHoy);
+        preserveFocus(document.getElementById('tab-libro'), renderTabLibro);
       }).catch(function(err){ console.error(err); toast('No se pudo procesar la foto', 'bad'); });
     });
   }
@@ -1389,7 +1426,7 @@ function renderTabHoy(){
   var chatPreviewQuitar = document.getElementById('chatPreviewQuitar');
   if (chatPreviewQuitar) chatPreviewQuitar.onclick = function(){
     state.bitacoraChatFoto = null;
-    preserveFocus(document.getElementById('tab-hoy'), renderTabHoy);
+    preserveFocus(document.getElementById('tab-libro'), renderTabLibro);
   };
 
   var chatEnviarBtn = document.getElementById('chatEnviar');
@@ -1421,7 +1458,7 @@ function changeDay(iso){
   state.bitacoraChatFoto = null;
   state.bitacoraChatDraftTexto = '';
   resubscribeForTab();
-  renderTabHoy();
+  renderCurrentTab();
 }
 
 function setConteoLocal(cid, val, skipDomSync){
@@ -1493,7 +1530,7 @@ async function enviarMensajeBitacora(){
   };
   state.bitacoraChatDraftTexto = '';
   state.bitacoraChatFoto = null;
-  renderTabHoy();
+  renderTabLibro();
   beginSave();
   try{
     await Store.addDoc('bitacoraMensajes', data);
