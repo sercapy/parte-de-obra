@@ -787,6 +787,22 @@ var SEED_DATA = {
   ]
 };
 
+function seedDebugToast(msg, isBad){
+  // Longer-lived than the normal toast() (12s instead of 2.6s) and doesn't
+  // touch the shared toastTimer, so it can be read/screenshotted. Temporary
+  // diagnostic aid for the Firestore seeding step.
+  try{
+    var el = document.getElementById('toast');
+    if (!el) return;
+    el.textContent = msg;
+    el.style.maxWidth = '92vw';
+    el.style.whiteSpace = 'normal';
+    el.style.textAlign = 'center';
+    el.className = 'toast show' + (isBad ? ' bad' : '');
+    setTimeout(function(){ el.className = 'toast'; }, 12000);
+  }catch(e){}
+}
+
 async function seedInitialDataIfEmpty(){
   // Checks each collection independently (not just 'obras') so that if an
   // earlier partial seed left some collections empty, they get backfilled
@@ -796,17 +812,34 @@ async function seedInitialDataIfEmpty(){
   try{ already = localStorage.getItem('parteobra:seedDone2'); }catch(e){}
   if (already === '1') return;
   var allNonEmpty = true;
+  var hadError = false;
+  var notes = [];
   for (var collection in SEED_DATA){
     var docs = SEED_DATA[collection];
     var existing = [];
     try{ existing = await Store.getCollection(collection, {}); }
-    catch(e){ console.error('seed check failed', collection, e); }
+    catch(e){
+      console.error('seed check failed', collection, e);
+      hadError = true;
+      notes.push(collection + ': error al leer (' + ((e && (e.code || e.message)) || e) + ')');
+    }
     if (existing && existing.length > 0) continue;
     allNonEmpty = false;
+    var ok = 0;
     for (var i = 0; i < docs.length; i++){
-      try{ await Store.setDoc(collection, docs[i].id, docs[i].data); }
-      catch(e){ console.error('seed failed', collection, docs[i].id, e); allNonEmpty = false; }
+      try{ await Store.setDoc(collection, docs[i].id, docs[i].data); ok++; }
+      catch(e){
+        console.error('seed failed', collection, docs[i].id, e);
+        allNonEmpty = false;
+        hadError = true;
+        notes.push(collection + ': error al guardar (' + ((e && (e.code || e.message)) || e) + ')');
+      }
     }
+    notes.push(collection + ': ' + ok + '/' + docs.length + ' guardados');
+  }
+  if (notes.length){
+    console.log('Seed report:', notes.join(' | '));
+    setTimeout(function(){ seedDebugToast(notes.join(' · '), hadError); }, 1200);
   }
   if (allNonEmpty){
     try{ localStorage.setItem('parteobra:seedDone2', '1'); }catch(e){}
