@@ -788,22 +788,29 @@ var SEED_DATA = {
 };
 
 async function seedInitialDataIfEmpty(){
+  // Checks each collection independently (not just 'obras') so that if an
+  // earlier partial seed left some collections empty, they get backfilled
+  // on the next load instead of being skipped forever. A collection that
+  // already has data (real or previously seeded) is left untouched.
   var already = null;
-  try{ already = localStorage.getItem('parteobra:seedDone'); }catch(e){}
+  try{ already = localStorage.getItem('parteobra:seedDone2'); }catch(e){}
   if (already === '1') return;
-  var existing = await Store.getCollection('obras', {});
-  if (existing && existing.length > 0){
-    try{ localStorage.setItem('parteobra:seedDone', '1'); }catch(e){}
-    return;
-  }
+  var allNonEmpty = true;
   for (var collection in SEED_DATA){
     var docs = SEED_DATA[collection];
+    var existing = [];
+    try{ existing = await Store.getCollection(collection, {}); }
+    catch(e){ console.error('seed check failed', collection, e); }
+    if (existing && existing.length > 0) continue;
+    allNonEmpty = false;
     for (var i = 0; i < docs.length; i++){
       try{ await Store.setDoc(collection, docs[i].id, docs[i].data); }
-      catch(e){ console.error('seed failed', collection, docs[i].id, e); }
+      catch(e){ console.error('seed failed', collection, docs[i].id, e); allNonEmpty = false; }
     }
   }
-  try{ localStorage.setItem('parteobra:seedDone', '1'); }catch(e){}
+  if (allNonEmpty){
+    try{ localStorage.setItem('parteobra:seedDone2', '1'); }catch(e){}
+  }
 }
 
 var FIREBASE_CONFIG = {
