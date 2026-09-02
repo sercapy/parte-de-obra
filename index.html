@@ -270,6 +270,7 @@
     width:100%; padding:10px 11px; border:1px solid var(--line); border-radius:10px; font-size:14.5px; background:var(--surface); color:var(--ink); font-family:inherit;
   }
   .form-row .hint{ font-size:11.5px; color:var(--ink-faint); margin-top:4px; }
+  .bitacora-meta{ font-size:11.5px; color:var(--ink-faint); margin-top:8px; }
   .checklist{ display:flex; flex-wrap:wrap; gap:7px; }
   .checkchip{ display:flex; align-items:center; gap:6px; padding:8px 12px; border-radius:99px; border:1px solid var(--line); background:var(--surface); font-size:13px; font-weight:600; }
   .checkchip input{ width:15px; height:15px; }
@@ -478,6 +479,12 @@ function fmtGs(n){
   catch(e){ return n + ' Gs.'; }
 }
 function nowISO(){ return new Date().toISOString(); }
+function fmtFechaHora(iso){
+  try{
+    var d = new Date(iso);
+    return d.toLocaleDateString('es-PY', {day:'numeric', month:'short'}) + ', ' + d.toLocaleTimeString('es-PY', {hour:'2-digit', minute:'2-digit'});
+  }catch(e){ return iso; }
+}
 function clamp(n, min, max){ return Math.max(min, Math.min(max, n)); }
 function escapeHtml(s){
   return String(s==null?'':s).replace(/[&<>"']/g, function(c){
@@ -1252,6 +1259,17 @@ function renderTabHoy(){
     html += '<label class="addphoto">' + ICO.camera + '<input type="file" accept="image/*" id="bitacoraFotoInput"></label>';
   }
   html += '</div>';
+  if (state.bitacoraDoc && state.bitacoraDoc.actualizadoPor){
+    var mismoAutor = state.bitacoraDoc.creadoPor === state.bitacoraDoc.actualizadoPor;
+    html += '<div class="bitacora-meta">';
+    if (state.bitacoraDoc.creadoPor){
+      html += 'Cargado por ' + escapeHtml(state.bitacoraDoc.creadoPor) + (state.bitacoraDoc.creadoEn ? ' · ' + fmtFechaHora(state.bitacoraDoc.creadoEn) : '');
+    }
+    if (!mismoAutor || !state.bitacoraDoc.creadoPor){
+      html += (state.bitacoraDoc.creadoPor ? '<br>' : '') + 'Última edición: ' + escapeHtml(state.bitacoraDoc.actualizadoPor) + (state.bitacoraDoc.actualizadoEn ? ' · ' + fmtFechaHora(state.bitacoraDoc.actualizadoEn) : '');
+    }
+    html += '</div>';
+  }
   html += '</div>';
 
   root.innerHTML = html;
@@ -1386,6 +1404,7 @@ async function guardarAsistencia(conteos){
 
 async function guardarBitacora(partial){
   if (!state.currentObraId) return;
+  var usuarioActual = (state.sesionActual && (state.sesionActual.nombre || state.sesionActual.usuario)) || '';
   var base = {
     obraId: state.currentObraId,
     fecha: state.currentDate,
@@ -1393,9 +1412,11 @@ async function guardarBitacora(partial){
     motivoNoTrabajo: (state.bitacoraDoc && state.bitacoraDoc.motivoNoTrabajo) || '',
     climaEstado: (state.bitacoraDoc && state.bitacoraDoc.climaEstado) || '',
     nota: (state.bitacoraDoc && state.bitacoraDoc.nota) || '',
-    fotos: (state.bitacoraDoc && state.bitacoraDoc.fotos) || []
+    fotos: (state.bitacoraDoc && state.bitacoraDoc.fotos) || [],
+    creadoPor: (state.bitacoraDoc && state.bitacoraDoc.creadoPor) || usuarioActual,
+    creadoEn: (state.bitacoraDoc && state.bitacoraDoc.creadoEn) || nowISO()
   };
-  var data = Object.assign(base, partial, { actualizadoEn: nowISO() });
+  var data = Object.assign(base, partial, { actualizadoEn: nowISO(), actualizadoPor: usuarioActual });
   if (JSON.stringify(data).length > 240000){
     toast('Las fotos pesan demasiado juntas. Sacá una y probá de nuevo.', 'bad');
     if (partial.fotos){ state.bitacoraFotosDraft = base.fotos; renderTabHoy(); }
