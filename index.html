@@ -92,7 +92,7 @@
   button{ font-family:inherit; }
   a{ color:var(--accent-2); }
 
-  #app{ max-width:560px; margin:0 auto; min-height:100vh; display:flex; flex-direction:column; background:var(--bg); }
+  #app{ max-width:560px; margin:0 auto; display:flex; flex-direction:column; background:var(--bg); }
 
   /* ---------- Header ---------- */
   header.topbar{
@@ -131,7 +131,7 @@
   }
 
   /* ---------- Main / tabs ---------- */
-  main{ flex:1; padding:14px 14px 90px; }
+  main{ padding:14px 14px 18px; }
   .tabpanel{ display:none; animation:fade .15s ease; }
   .tabpanel.active{ display:block; }
   @keyframes fade{ from{ opacity:0; transform:translateY(3px);} to{ opacity:1; transform:none; } }
@@ -305,10 +305,11 @@
 
   /* Bottom nav */
   nav.tabbar{
-    position:fixed; bottom:0; left:0; right:0; z-index:30;
+    position:sticky; bottom:0; z-index:30;
     background:var(--surface); border-top:1px solid var(--line);
     display:flex; padding:6px 6px calc(6px + env(safe-area-inset-bottom));
     max-width:560px; margin:0 auto;
+    flex-shrink:0;
   }
   nav.tabbar .navbtn{ flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; padding:7px 2px; border:none; background:transparent; color:var(--ink-faint); }
   nav.tabbar .navbtn svg{ width:21px; height:21px; }
