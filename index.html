@@ -814,16 +814,26 @@ var FIREBASE_CONFIG = {
 async function boot(){
   setStatus('busy', 'Conectando');
   var db = null;
+  var fbErr = null;
   try{
-    if (window.firebase && FIREBASE_CONFIG.apiKey){
+    if (!window.firebase){ fbErr = 'SDK de Firebase no cargó (revisá conexión a internet)'; }
+    else if (!FIREBASE_CONFIG.apiKey){ fbErr = 'Falta configuración de Firebase'; }
+    else{
       firebase.initializeApp(FIREBASE_CONFIG);
       await firebase.auth().signInAnonymously();
       db = firebase.firestore();
     }
-  }catch(e){ console.error(e); }
+  }catch(e){
+    console.error(e);
+    fbErr = (e && (e.code || e.message)) ? ((e.code || '') + ' ' + (e.message || '')).trim() : String(e);
+  }
   Store.init(db);
   state.offlineMode = (Store.backend === 'local');
-  setStatus(state.offlineMode ? 'off' : 'ok', state.offlineMode ? 'Modo local' : 'Sincronizado');
+  if (state.offlineMode && fbErr){
+    setStatus('off', 'Error Firebase: ' + fbErr);
+  } else {
+    setStatus(state.offlineMode ? 'off' : 'ok', state.offlineMode ? 'Modo local' : 'Sincronizado');
+  }
 
   if (Store.backend === 'db'){
     try{ await seedInitialDataIfEmpty(); }catch(e){ console.error('seed error', e); }
